@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Talaba ro'yxatdan o'tishi</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background:#f3f4f6; margin:0; padding:16px; color:#111827; }
+  .card { max-width:540px; margin:20px auto; background:#fff; border-radius:14px; padding:24px; box-shadow:0 4px 20px rgba(0,0,0,.06); }
+  h1 { font-size:22px; margin:0 0 6px; }
+  .sub { color:#6b7280; font-size:14px; margin:0 0 18px; }
+  .field { margin-top:16px; }
+  .field > label { display:block; font-weight:600; margin-bottom:6px; font-size:14px; }
+  select, input[type=text], input[type=file] { width:100%; padding:11px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:15px; background:#fff; }
+  .radios { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .radios label { display:flex; align-items:center; gap:8px; border:1px solid #d1d5db; border-radius:8px; padding:10px; cursor:pointer; font-size:15px; }
+  .radios ul { list-style:none; padding:0; margin:0; display:contents; }
+  .radios li { display:contents; }
+  .hint { color:#6b7280; font-size:13px; margin-top:4px; }
+  .errorlist { color:#dc2626; font-size:13px; margin:4px 0 0; padding-left:16px; }
+  button { width:100%; margin-top:22px; padding:13px; border:0; border-radius:8px; background:#2563eb; color:#fff; font-size:16px; font-weight:600; cursor:pointer; }
+  button:hover { background:#1d4ed8; }
+  .opt { font-weight:400; color:#6b7280; }
+  #map { height:280px; border-radius:8px; border:1px solid #d1d5db; z-index:0; }
+  .map-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+  button.small { width:auto; margin:0; padding:8px 12px; font-size:14px; font-weight:500; }
+  button.ghost { background:#fff; color:#374151; border:1px solid #d1d5db; }
+  button.ghost:hover { background:#f9fafb; }
+</style>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+</head>
+<body>
+<div class="card">
+  <h1>Ro'yxatdan o'tish</h1>
+  <p class="sub">Barcha maydonlarni to'ldiring.</p>
+
+  <form method="post" enctype="multipart/form-data" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+
+    <div class="field">
+      <label for="{{ form.course.id_for_label }}">Kurs</label>
+      {{ form.course }}{{ form.course.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.group.id_for_label }}">Guruh</label>
+      {{ form.group }}{{ form.group.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.last_name.id_for_label }}">Familiya</label>
+      {{ form.last_name }}{{ form.last_name.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.first_name.id_for_label }}">Ism</label>
+      {{ form.first_name }}{{ form.first_name.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.middle_name.id_for_label }}">Otasining ismi</label>
+      {{ form.middle_name }}{{ form.middle_name.errors }}
+    </div>
+
+    <div class="field">
+      <label>Yashash joyi</label>
+      <div class="radios">
+        {% for radio in form.residence_type %}
+          <label>{{ radio.tag }} {{ radio.choice_label }}</label>
+        {% endfor %}
+      </div>
+      {{ form.residence_type.errors }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.current_address.id_for_label }}">Hozirgi yashash manzili</label>
+      {{ form.current_address }}{{ form.current_address.errors }}
+    </div>
+
+    <div class="field">
+      <label>Xaritada uyingizni belgilang <span class="opt">(ixtiyoriy)</span></label>
+      <div class="hint" style="margin:0 0 8px">Tyutor uyingizga borganda manzilni topishi uchun. Xaritani bosib nuqta qo'ying yoki pastdagi tugmani bosing.</div>
+      <div id="map"></div>
+      <div class="map-actions">
+        <button type="button" class="small" id="locate">📍 Hozirgi joyimni aniqlash</button>
+        <button type="button" class="small ghost" id="clear-loc" hidden>Belgini o'chirish</button>
+      </div>
+      <div class="hint" id="loc-status">Nuqta qo'yilmagan.</div>
+      {{ form.latitude }}{{ form.longitude }}
+    </div>
+
+    <div class="field">
+      <label for="{{ form.passport_file.id_for_label }}">Pasport nusxasi</label>
+      <input type="file" name="passport_file" id="{{ form.passport_file.id_for_label }}" accept=".jpg,.jpeg,.png,.pdf">
+      <div class="hint">JPG, PNG yoki PDF, 5 MB gacha.</div>
+      {{ form.passport_file.errors }}
+    </div>
+
+
+    <button type="submit">Yuborish</button>
+  </form>
+</div>
+
+{{ groups|json_script:"groups-data" }}
+<script>
+  // Kurs tanlanganda faqat o'sha kurs guruhlarini ko'rsatish
+  const groups = JSON.parse(document.getElementById("groups-data").textContent);
+  const courseSel = document.getElementById("{{ form.course.id_for_label }}");
+  const groupSel = document.getElementById("{{ form.group.id_for_label }}");
+  const selected = groupSel.value;
+
+  function fillGroups() {
+    const course = courseSel.value;
+    groupSel.innerHTML = "";
+    const first = new Option(course ? "— Guruhni tanlang —" : "— Avval kursni tanlang —", "");
+    groupSel.add(first);
+    groups.filter(g => String(g.course) === course).forEach(g => {
+      groupSel.add(new Option(g.name, g.id, false, String(g.id) === selected));
+    });
+    groupSel.disabled = !course;
+  }
+  courseSel.addEventListener("change", fillGroups);
+  fillGroups();
+</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+  // Xaritada uyni belgilash (ixtiyoriy)
+  const latIn = document.getElementById("{{ form.latitude.id_for_label }}");
+  const lngIn = document.getElementById("{{ form.longitude.id_for_label }}");
+  const status = document.getElementById("loc-status");
+  const clearBtn = document.getElementById("clear-loc");
+
+  const map = L.map("map").setView([41.3111, 69.2797], 11); // Toshkent
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: "&copy; OpenStreetMap"
+  }).addTo(map);
+
+  let marker = null;
+  function setPoint(lat, lng, zoom) {
+    lat = +lat.toFixed(6); lng = +lng.toFixed(6);
+    if (marker) marker.setLatLng([lat, lng]);
+    else {
+      marker = L.marker([lat, lng], { draggable: true }).addTo(map);
+      marker.on("dragend", e => { const p = e.target.getLatLng(); setPoint(p.lat, p.lng); });
+    }
+    latIn.value = lat; lngIn.value = lng;
+    status.textContent = "Belgilandi ✓ Kerak bo'lsa, nuqtani surib aniqlashtiring.";
+    clearBtn.hidden = false;
+    if (zoom) map.setView([lat, lng], zoom);
+  }
+
+  map.on("click", e => setPoint(e.latlng.lat, e.latlng.lng));
+
+  document.getElementById("locate").onclick = () => {
+    if (!navigator.geolocation) { status.textContent = "Brauzeringiz joylashuvni aniqlay olmaydi. Xaritani bosib belgilang."; return; }
+    status.textContent = "Aniqlanmoqda...";
+    navigator.geolocation.getCurrentPosition(
+      p => setPoint(p.coords.latitude, p.coords.longitude, 17),
+      () => { status.textContent = "Joylashuvga ruxsat berilmadi. Xaritani bosib belgilashingiz mumkin."; },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  clearBtn.onclick = () => {
+    if (marker) { map.removeLayer(marker); marker = null; }
+    latIn.value = ""; lngIn.value = "";
+    status.textContent = "Nuqta qo'yilmagan."; clearBtn.hidden = true;
+  };
+
+  // Forma xato bilan qaytsa, avval qo'yilgan nuqtani tiklash
+  if (latIn.value && lngIn.value) setPoint(parseFloat(latIn.value), parseFloat(lngIn.value), 16);
+</script>
+</body>
+</html>

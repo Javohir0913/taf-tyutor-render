@@ -1,0 +1,30 @@
+# /etc/systemd/system/taf-tyutor.service
+# Gunicorn — Django'ni ishga tushiradi, server qayta yonsa o'zi ko'tariladi.
+
+[Unit]
+Description=TAF-TYUTOR (Gunicorn)
+After=network.target
+
+[Service]
+User=taftyutor
+Group=www-data
+WorkingDirectory=/srv/taf-tyutor
+RuntimeDirectory=taf-tyutor
+RuntimeDirectoryMode=0750
+UMask=0007
+ExecStart=/srv/taf-tyutor/venv/bin/gunicorn config.wsgi:application \
+    --workers 3 \
+    --bind unix:/run/taf-tyutor/gunicorn.sock \
+    --timeout 60 \
+    --access-logfile - \
+    --error-logfile -
+Restart=always
+RestartSec=3
+
+# Qo'shimcha himoya
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

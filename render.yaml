@@ -1,0 +1,25 @@
+# Render Blueprint (ixtiyoriy): Dashboard > New > Blueprint orqali shu fayldan avtomatik yaratish
+services:
+  - type: web
+    name: taf-tyutor
+    runtime: python
+    plan: starter          # doimiy disk faqat pullik tarifda ishlaydi
+    buildCommand: ./build.sh
+    startCommand: ./start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: DEBUG
+        value: "False"
+      - key: USE_HTTPS
+        value: "True"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: SQLITE_PATH
+        value: /var/data/db.sqlite3
+      - key: PRIVATE_MEDIA_ROOT
+        value: /var/data/private_media
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
